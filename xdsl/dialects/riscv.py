@@ -2537,9 +2537,10 @@ class MulOpHasCanonicalizationPatternsTrait(HasCanonicalizationPatternsTrait):
         from xdsl.transforms.canonicalization_patterns.riscv import (
             MultiplyImmediates,
             MultiplyImmediateZero,
+            MultiplyImmediateOne,
         )
 
-        return (MultiplyImmediates(), MultiplyImmediateZero())
+        return (MultiplyImmediates(), MultiplyImmediateZero(), MultiplyImmediateOne())
 
 
 @irdl_op_definition
