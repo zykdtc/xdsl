@@ -11,7 +11,6 @@ from math import prod
 from typing import (
     TYPE_CHECKING,
     Annotated,
-    Any,
     Generic,
     TypeAlias,
     cast,
@@ -19,7 +18,7 @@ from typing import (
 )
 
 from immutabledict import immutabledict
-from typing_extensions import Self, TypeVar, deprecated
+from typing_extensions import Self, TypeVar, deprecated, override
 
 from xdsl.dialect_interfaces import OpAsmDialectInterface
 from xdsl.ir import (
@@ -143,7 +142,10 @@ class NoneAttr(ParametrizedAttribute, BuiltinAttribute):
 
 @irdl_attr_definition
 class ArrayAttr(
-    GenericData[tuple[AttributeCovT, ...]], BuiltinAttribute, Iterable[AttributeCovT]
+    Generic[AttributeCovT],
+    GenericData[tuple[AttributeCovT, ...]],
+    BuiltinAttribute,
+    Iterable[AttributeCovT],
 ):
     name = "array"
 
@@ -166,24 +168,18 @@ class ArrayAttr(
             printer.print_list(self.data, printer.print_attribute)
 
     @staticmethod
-    def generic_constraint_coercion(args: tuple[Any]) -> AttrConstraint:
-        assert len(args) == 1
-        return ArrayOfConstraint(RangeOf(irdl_to_attr_constraint(args[0])))
+    @override
+    def constr(
+        constr: IRDLGenericAttrConstraint[AttributeInvT]
+        | GenericRangeConstraint[AttributeInvT],
+    ) -> ArrayOfConstraint[AttributeInvT]:
+        return ArrayOfConstraint(constr)
 
     def __len__(self):
         return len(self.data)
 
     def __iter__(self) -> Iterator[AttributeCovT]:
         return iter(self.data)
-
-    @staticmethod
-    def constr(
-        constr: (
-            IRDLGenericAttrConstraint[AttributeInvT]
-            | GenericRangeConstraint[AttributeInvT]
-        ),
-    ) -> GenericAttrConstraint[ArrayAttr[AttributeInvT]]:
-        return ArrayOfConstraint(constr)
 
 
 @dataclass(frozen=True)
@@ -1182,7 +1178,7 @@ class ComplexType(
 
 
 @irdl_attr_definition
-class DictionaryAttr(GenericData[immutabledict[str, Attribute]], BuiltinAttribute):
+class DictionaryAttr(Data[immutabledict[str, Attribute]], BuiltinAttribute):
     name = "dictionary"
 
     def __init__(self, value: Mapping[str, Attribute]):
@@ -1199,10 +1195,6 @@ class DictionaryAttr(GenericData[immutabledict[str, Attribute]], BuiltinAttribut
 
     def print_builtin(self, printer: Printer):
         printer.print_attr_dict(self.data)
-
-    @staticmethod
-    def generic_constraint_coercion(args: tuple[Any]) -> AttrConstraint:
-        raise Exception(f"Unsupported operation on {DictionaryAttr.name}")
 
     def verify(self) -> None:
         return super().verify()
@@ -1439,6 +1431,11 @@ class ContainerOf(
             self.elem_constr.verify(attr.element_type, constraint_context)
         else:
             self.elem_constr.verify(attr, constraint_context)
+
+    def get_bases(self) -> set[type[Attribute]] | None:
+        bases = self.elem_constr.get_bases()
+        if bases is not None:
+            return {*bases, TensorType, VectorType}
 
     def mapping_type_vars(
         self, type_var_mapping: dict[TypeVar, AttrConstraint]
@@ -2251,7 +2248,7 @@ class MemRefType(
 
     shape: ParameterDef[ArrayAttr[IntAttr]]
     element_type: ParameterDef[_MemRefTypeElement]
-    layout: ParameterDef[MemRefLayoutAttr | NoneAttr]
+    layout: ParameterDef[StridedLayoutAttr | AffineMapAttr | NoneAttr]
     memory_space: ParameterDef[Attribute]
 
     def __init__(
