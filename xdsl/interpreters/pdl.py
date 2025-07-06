@@ -6,7 +6,7 @@ from typing import IO, Any, ClassVar
 
 from xdsl.context import Context
 from xdsl.dialects import pdl
-from xdsl.dialects.builtin import IntegerAttr, IntegerType, ModuleOp
+from xdsl.dialects.builtin import IntegerAttr, IntegerType, ModuleOp, StringAttr
 from xdsl.interpreter import Interpreter, InterpreterFunctions, impl, register_impls
 from xdsl.ir import Attribute, Operation, OpResult, SSAValue, TypeAttribute
 from xdsl.irdl import IRDLOperation
@@ -36,6 +36,7 @@ class PDLMatcher:
     The functions that can be used in `pdl.apply_native_constraint`. Note that we do
     not verify that the functions are used with the correct types.
     """
+    conter = 0
 
     def get_constant_or_matched_value(
         self, ssa_val: SSAValue
@@ -60,6 +61,7 @@ class PDLMatcher:
     def match_operand(
         self, ssa_val: SSAValue, pdl_op: pdl.OperandOp, xdsl_val: SSAValue
     ):
+        print(f"Matching {ssa_val} of {pdl_op} with {xdsl_val}")
         if ssa_val in self.matching_context:
             return self.matching_context[ssa_val] == xdsl_val
 
@@ -149,6 +151,8 @@ class PDLMatcher:
     def match_operation(
         self, ssa_val: SSAValue, pdl_op: pdl.OperationOp, xdsl_op: Operation
     ) -> bool:
+        print(f"match opration {self.conter}")
+        self.conter += 1
         if ssa_val in self.matching_context:
             return self.matching_context[ssa_val] == xdsl_op
 
@@ -168,6 +172,8 @@ class PDLMatcher:
                 return False
 
         pdl_operands = pdl_op.operand_values
+        for pdl_operand in pdl_operands:
+            print(f"operandsvvv: {pdl_operand}")
         xdsl_operands = xdsl_op.operands
 
         if len(pdl_operands) != len(xdsl_operands):
@@ -242,8 +248,77 @@ class PDLRewritePattern(RewritePattern):
 
         assert isinstance(pdl_op, pdl.OperationOp)
         matcher = PDLMatcher()
+        print(
+            f"Matching SSA {pdl_op_val} PDL operation {pdl_op} with XDSL operation {xdsl_op}\n"
+        )
         if not matcher.match_operation(pdl_op_val, pdl_op, xdsl_op):
             return
+        print("\n!!!!Matched!!!!!\n")
+        print(f"matcher: {matcher.matching_context.items()}")
+
+        parent = self.pdl_rewrite_op.parent_op()
+        assert isinstance(parent, pdl.PatternOp)
+        for constraint_op in parent.walk():
+            if isinstance(constraint_op, pdl.ApplyNativeConstraintOp):
+                if not matcher.check_native_constraints(constraint_op):
+                    return
+
+        self.interpreter.push_scope("rewrite")
+        self.interpreter.set_values(matcher.matching_context.items())
+        self.functions.rewriter = rewriter
+
+        self.interpreter.run_ssacfg_region(self.pdl_rewrite_op.body, ())
+
+        self.interpreter.pop_scope()
+
+    def match_and_rewrite2(
+        self,
+        xdsl_op: Operation,
+        rewriter: PatternRewriter,
+        store_dict: dict[SSAValue, Operation],
+    ) -> None:
+        pdl_op_val = self.pdl_rewrite_op.root
+        assert pdl_op_val is not None, "TODO: handle None root op in pdl.RewriteOp"
+        assert self.pdl_rewrite_op.body is not None, (
+            "TODO: handle None body op in pdl.RewriteOp"
+        )
+
+        assert isinstance(pdl_op_val, OpResult)
+        pdl_op = pdl_op_val.op
+
+        assert isinstance(pdl_op, pdl.OperationOp)
+        matcher = PDLMatcher()
+        print(
+            f"Matching SSA {pdl_op_val} PDL operation {pdl_op} with XDSL operation {xdsl_op}\n"
+        )
+        if not matcher.match_operation(pdl_op_val, pdl_op, xdsl_op):
+            return
+        print("\n!!!!Matched!!!!!\n")
+        print(f"matcher: {matcher.matching_context.items()}")
+
+        assert isinstance(pdl_op.opName, StringAttr)
+        assert isinstance(pdl_op.prev_op, pdl.OperationOp)
+        assert isinstance(pdl_op.prev_op.opName, StringAttr)
+        if (
+            pdl_op.opName.data == "memref.load"
+            and pdl_op.prev_op.opName.data == "memref.store"
+        ):
+            # Special case for memref.load, check  previous operation
+            # to see if it is a memref.store, and if so, match the value stored
+
+            print(f"xdsl_op Name: {xdsl_op.name}")
+            print(
+                f"xdsl_op operands: {xdsl_op.operands[0]} with type {xdsl_op.operands[0].type}"
+            )
+            print(f"Check store_dict: {store_dict.get(xdsl_op.operands[0])}")
+            print(f"{pdl_op.prev_op.op.op}")
+            xdsl_op_prev = store_dict.get(xdsl_op.operands[0])
+            assert isinstance(xdsl_op_prev, Operation)
+            if not matcher.match_operation(
+                pdl_op.prev_op.op, pdl_op.prev_op, xdsl_op_prev
+            ):
+                print("NOT match???")
+                return
 
         parent = self.pdl_rewrite_op.parent_op()
         assert isinstance(parent, pdl.PatternOp)

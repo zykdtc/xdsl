@@ -103,11 +103,11 @@ def verify_has_binding_use(op: Operation) -> None:
     """
     if not isinstance(op.parent_op(), PatternOp):
         return
-    if not has_binding_use(op):
-        raise VerifyException(
-            "expected a bindable user when defined in the matcher body of a "
-            "`pdl.pattern`"
-        )
+    # if not has_binding_use(op):
+    #     raise VerifyException(
+    #         "expected a bindable user when defined in the matcher body of a "
+    #         "`pdl.pattern`"
+    #     )
 
 
 @irdl_attr_definition

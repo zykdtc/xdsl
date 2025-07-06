@@ -23,6 +23,7 @@ from xdsl.ir import (
     Block,
     Operation,
     OperationInvT,
+    OpResult,
     Region,
     SSAValue,
     TypeAttribute,
@@ -680,6 +681,10 @@ class Interpreter:
         """
         Get values from current environment.
         """
+        for value in values:
+            # print(f"Getting {value} : {self._ctx[value]}")
+            assert isinstance(value, OpResult)
+            print(f"Getting Operands operation: {value.op}")
         return tuple(self._ctx[value] for value in values)
 
     def set_values(self, pairs: Iterable[tuple[SSAValue, Any]]):
@@ -689,6 +694,7 @@ class Interpreter:
         if SSA value already has a Python value in the current scope.
         """
         for ssa_value, result_value in pairs:
+            print(f"Setting {ssa_value} with {result_value}")
             self._ctx[ssa_value] = result_value
 
     def push_scope(self, name: str | None = None) -> None:
@@ -788,6 +794,9 @@ class Interpreter:
             block = None
 
             while op is not None:
+                print(op)
+                print(f"Running op {op.name} with operands {op.operands}")
+
                 inputs = self.get_values(op.operands)
                 result = self._run_op(op, inputs)
                 self.interpreter_assert(

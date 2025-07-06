@@ -318,6 +318,15 @@ class RewritePattern(ABC):
         """
         ...
 
+    @abstractmethod
+    def match_and_rewrite2(
+        self,
+        op: Operation,
+        rewriter: PatternRewriter,
+        store_dict: dict[SSAValue, Operation],
+        /,
+    ): ...
+
 
 _RewritePatternT = TypeVar("_RewritePatternT", bound=RewritePattern)
 _OperationT = TypeVar("_OperationT", bound=Operation)
@@ -548,6 +557,18 @@ class GreedyRewritePatternApplier(RewritePattern):
                 return
         return
 
+    def match_and_rewrite2(
+        self,
+        op: Operation,
+        rewriter: PatternRewriter,
+        store_dict: dict[SSAValue, Operation],
+    ) -> None:
+        for pattern in self.rewrite_patterns:
+            pattern.match_and_rewrite2(op, rewriter, store_dict)
+            if rewriter.has_done_action:
+                return
+        return
+
 
 @dataclass(eq=False)
 class Worklist:
@@ -614,6 +635,11 @@ class PatternRewriteWalker:
 
     pattern: RewritePattern
     """Pattern to apply during the walk."""
+
+    store_dict: dict[SSAValue, Operation] = field(
+        default_factory=dict[SSAValue, Operation]
+    )
+    """A dictionary to store the operations that are created during the walk."""
 
     walk_regions_first: bool = field(default=False)
     """
@@ -750,6 +776,14 @@ class PatternRewriteWalker:
         for sub_op in op.walk(
             reverse=not self.walk_reverse, region_first=not self.walk_regions_first
         ):
+            if sub_op.name == "memref.store":
+                # catch the nearest memref.store operation to store_dict
+                # TODO: handle multiple memref.store operations
+                # TODO: handle different order of operations
+                print("\nFound memref.store operation, storing it in store_dict\n")
+                print(f"Operation: {sub_op.operands[1]}\n")
+                self.store_dict[sub_op.operands[1]] = sub_op
+                print(f"store_dict: {self.store_dict.get(sub_op.operands[1])}\n")
             self._worklist.push(sub_op)
 
     def _process_worklist(self, listener: PatternRewriterListener) -> bool:
@@ -777,7 +811,8 @@ class PatternRewriteWalker:
 
             # Apply the pattern on the operation
             try:
-                self.pattern.match_and_rewrite(op, rewriter)
+                self.pattern.match_and_rewrite2(op, rewriter, self.store_dict)
+                # self.pattern.match_and_rewrite(op, rewriter)
             except Exception as err:
                 op.emit_error(
                     f"Error while applying pattern: {str(err)}",
