@@ -297,28 +297,28 @@ class PDLRewritePattern(RewritePattern):
         print(f"matcher: {matcher.matching_context.items()}")
 
         assert isinstance(pdl_op.opName, StringAttr)
-        assert isinstance(pdl_op.prev_op, pdl.OperationOp)
-        assert isinstance(pdl_op.prev_op.opName, StringAttr)
-        if (
-            pdl_op.opName.data == "memref.load"
-            and pdl_op.prev_op.opName.data == "memref.store"
-        ):
-            # Special case for memref.load, check  previous operation
-            # to see if it is a memref.store, and if so, match the value stored
-
-            print(f"xdsl_op Name: {xdsl_op.name}")
-            print(
-                f"xdsl_op operands: {xdsl_op.operands[0]} with type {xdsl_op.operands[0].type}"
-            )
-            print(f"Check store_dict: {store_dict.get(xdsl_op.operands[0])}")
-            print(f"{pdl_op.prev_op.op.op}")
-            xdsl_op_prev = store_dict.get(xdsl_op.operands[0])
-            assert isinstance(xdsl_op_prev, Operation)
-            if not matcher.match_operation(
-                pdl_op.prev_op.op, pdl_op.prev_op, xdsl_op_prev
+        if pdl_op.prev_op is pdl.OperationOp:
+            assert isinstance(pdl_op.prev_op.opName, StringAttr)
+            if (
+                pdl_op.opName.data == "memref.load"
+                and pdl_op.prev_op.opName.data == "memref.store"
             ):
-                print("NOT match???")
-                return
+                # Special case for memref.load, check  previous operation
+                # to see if it is a memref.store, and if so, match the value stored
+
+                print(f"xdsl_op Name: {xdsl_op.name}")
+                print(
+                    f"xdsl_op operands: {xdsl_op.operands[0]} with type {xdsl_op.operands[0].type}"
+                )
+                print(f"Check store_dict: {store_dict.get(xdsl_op.operands[0])}")
+                print(f"{pdl_op.prev_op.op.op}")
+                xdsl_op_prev = store_dict.get(xdsl_op.operands[0])
+                assert isinstance(xdsl_op_prev, Operation)
+                if not matcher.match_operation(
+                    pdl_op.prev_op.op, pdl_op.prev_op, xdsl_op_prev
+                ):
+                    print("NOT match???")
+                    return
 
         parent = self.pdl_rewrite_op.parent_op()
         assert isinstance(parent, pdl.PatternOp)
