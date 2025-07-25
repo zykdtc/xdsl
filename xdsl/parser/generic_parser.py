@@ -153,6 +153,7 @@ class GenericParser(Generic[TokenKindT]):
         Returns the token that was parsed.
         """
         if (result := self._parse_optional_token(expected_kind)) is None:
+            print(f"Result: {result}")
             self.raise_error(error_msg, self._current_token.span)
         return result
 

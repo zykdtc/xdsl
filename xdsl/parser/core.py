@@ -778,9 +778,11 @@ class Parser(AttrParser):
         and the size of the value tuple (by default 1).
         """
         if self._current_token.kind == MLIRTokenKind.PERCENT_IDENT:
+            print(f"Parsed operation results: {self._current_token}")
             res = self.parse_comma_separated_list(
                 self.Delimiter.NONE, self._parse_op_result, " in operation result list"
             )
+            print(f"Parsed operation results: {self._current_token}")
             self.parse_punctuation("=", " after operation result list")
             return res
         return []

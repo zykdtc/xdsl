@@ -184,13 +184,33 @@ class CheckAllUnreachableOp(IRDLOperation):
         )
 
 
+@irdl_op_definition
+class SeqOp(IRDLOperation):
+    name = "eqsat.seq"
+
+    ops = var_operand_def()
+    result = result_def()
+
+    assembly_format = "$ops attr-dict `:` type($result)"
+
+    def __init__(
+        self,
+        *ops: SSAValue,
+        res_type: Attribute | None = None,
+    ):
+        if len(ops) < 2:
+            raise DiagnosticException("eqsat.seq must have at least two operands")
+
+        # if res_type is None:
+        #     res_type = ops[-1].type
+
+        super().__init__(
+            operands=[ops],
+            result_types=[res_type],
+        )
+
+
 EqSat = Dialect(
     "eqsat",
-    [
-        EClassOp,
-        YieldOp,
-        EGraphOp,
-        MarkUnreachableOp,
-        CheckAllUnreachableOp,
-    ],
+    [EClassOp, YieldOp, EGraphOp, MarkUnreachableOp, CheckAllUnreachableOp, SeqOp],
 )
